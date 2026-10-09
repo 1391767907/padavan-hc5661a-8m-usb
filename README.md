@@ -9,7 +9,7 @@
 | Flash | **8MB**（W25Q64） |
 | RAM | **64MB** |
 | 复位键 | **GPIO38** |
-| USB | 开启（RNDIS / CDC Ether / ASIX / QMI 等） |
+| USB | 开启；补丁让 `usb0`(RNDIS) 走 NDIS WAN，可当 4G WAN |
 | Storage 分区 | `0x20000`（128KB，避免 8M 上 Storage 越界） |
 
 源码：`hanwckf/rt-n56u`（kernel 3.4）
