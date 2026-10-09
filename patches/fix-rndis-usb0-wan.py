@@ -153,36 +153,18 @@ def main() -> int:
         "defaults.c modem NDIS enabled",
     )
 
-    # 5) LAN / Web UI 192.168.123.1
-    import re
-
-    dtext = defaults.read_text(encoding="utf-8", errors="surrogateescape")
-    dnew = dtext
-    dnew, n1 = re.subn(
-        r'\{ "lan_ipaddr", "[^"]+" \}',
-        '{ "lan_ipaddr", "192.168.123.1" }',
-        dnew,
-        count=1,
+    # 5) LAN / Web UI 192.168.123.1 (macros in defaults.h)
+    defaults_h = trunk / "user/shared/defaults.h"
+    patch_file(
+        defaults_h,
+        '#define DEF_LAN_ADDR		"192.168.2.1"\n'
+        '#define DEF_LAN_DHCP_BEG	"192.168.2.100"\n'
+        '#define DEF_LAN_DHCP_END	"192.168.2.244"\n',
+        '#define DEF_LAN_ADDR		"192.168.123.1"\n'
+        '#define DEF_LAN_DHCP_BEG	"192.168.123.100"\n'
+        '#define DEF_LAN_DHCP_END	"192.168.123.244"\n',
+        "defaults.h LAN 192.168.123.1",
     )
-    dnew, n2 = re.subn(
-        r'\{ "dhcp_start", "192\.168\.\d+\.\d+" \}',
-        '{ "dhcp_start", "192.168.123.100" }',
-        dnew,
-        count=1,
-    )
-    dnew, n3 = re.subn(
-        r'\{ "dhcp_end", "192\.168\.\d+\.\d+" \}',
-        '{ "dhcp_end", "192.168.123.244" }',
-        dnew,
-        count=1,
-    )
-    if n1 < 1:
-        raise SystemExit("[patch] lan_ipaddr not found in defaults.c")
-    if dnew != dtext:
-        defaults.write_text(dnew, encoding="utf-8", errors="surrogateescape")
-        print(f"[patch] defaults.c LAN 192.168.123.1 (ip={n1} dhcp_start={n2} dhcp_end={n3})")
-    else:
-        print("[patch] defaults.c LAN already 192.168.123.1")
 
     print("[patch] rndis usb0 WAN support done")
     return 0
