@@ -59,9 +59,12 @@ if [ -f "$DB_MK" ]; then
   echo "[prepare] patched dropbear Makefile for cross zlib"
 fi
 
-# Enforce 64MB RAM / no 5G second radio (MT7628NN)
-sed -i 's/^CONFIG_RALINK_RAM_SIZE=.*/CONFIG_RALINK_RAM_SIZE=64/' \
-  "$BOARD_DST/kernel-3.4.x.config"
+# Enforce 64MB RAM / no media (avoid silentoldconfig NEW prompts)
+KCFG="$BOARD_DST/kernel-3.4.x.config"
+sed -i 's/^CONFIG_RALINK_RAM_SIZE=.*/CONFIG_RALINK_RAM_SIZE=64/' "$KCFG"
+sed -i 's/^CONFIG_MEDIA_SUPPORT=.*/# CONFIG_MEDIA_SUPPORT is not set/' "$KCFG"
+grep -q 'CONFIG_USB_VIDEO_CLASS_INPUT_EVDEV' "$KCFG" || \
+  echo '# CONFIG_USB_VIDEO_CLASS_INPUT_EVDEV is not set' >> "$KCFG"
 
 echo "[prepare] board files:"
 ls -la "$BOARD_DST"
