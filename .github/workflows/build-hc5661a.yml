@@ -7,6 +7,7 @@ env:
   SOURCE_REPO: https://github.com/hanwckf/rt-n56u.git
   TOOLCHAIN_URL: https://github.com/hanwckf/padavan-toolchain/releases/download/v1.1/mipsel-linux-uclibc.tar.xz
   PRODUCT: HC5661A
+  BUILD_DIR: /opt/rt-n56u
 
 jobs:
   build:
@@ -14,6 +15,8 @@ jobs:
     steps:
       - name: Checkout overlay
         uses: actions/checkout@v4
+        with:
+          path: overlay
 
       - name: Install dependencies
         run: |
@@ -22,48 +25,58 @@ jobs:
             build-essential autoconf automake bison flex gawk gettext \
             git gperf libtool pkg-config zlib1g-dev libgmp3-dev \
             libmpc-dev libmpfr-dev texinfo unzip libncurses5-dev \
-            ccache gengetopt python3 wget cpio fakeroot xz-utils
+            ccache gengetopt python3 wget cpio fakeroot xz-utils \
+            libtool-bin python3-docutils autopoint
 
       - name: Clone Padavan source
         run: |
-          git clone --depth=1 "$SOURCE_REPO" rt-n56u
-          echo "source=$(git -C rt-n56u rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          sudo mkdir -p "$BUILD_DIR" /opt/images
+          sudo chown -R "$USER:$USER" /opt/rt-n56u /opt/images
+          git clone --depth=1 "$SOURCE_REPO" "$BUILD_DIR"
+          echo "source=$(git -C "$BUILD_DIR" rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup toolchain
         run: |
-          sudo mkdir -p /opt
-          wget -qO /tmp/toolchain.tar.xz "$TOOLCHAIN_URL"
-          sudo tar -C /opt -xf /tmp/toolchain.tar.xz
-          if [ -d /opt/mipsel-linux-uclibc/bin ]; then
-            echo "/opt/mipsel-linux-uclibc/bin" >> "$GITHUB_PATH"
-          else
-            # some archives extract with nested dir
-            bin=$(find /opt -type f -name 'mipsel-linux-uclibc-gcc' | head -n1 | xargs dirname)
-            echo "$bin" >> "$GITHUB_PATH"
+          mkdir -p "$BUILD_DIR/toolchain-mipsel/toolchain-3.4.x"
+          wget -qO /tmp/mipsel-linux-uclibc.tar.xz "$TOOLCHAIN_URL"
+          tar -C "$BUILD_DIR/toolchain-mipsel/toolchain-3.4.x" -xf /tmp/mipsel-linux-uclibc.tar.xz
+          # archive may contain a top-level dir; flatten if needed
+          if [ ! -x "$BUILD_DIR/toolchain-mipsel/toolchain-3.4.x/bin/mipsel-linux-uclibc-gcc" ]; then
+            inner=$(find "$BUILD_DIR/toolchain-mipsel/toolchain-3.4.x" -type f -name 'mipsel-linux-uclibc-gcc' | head -n1)
+            if [ -n "$inner" ]; then
+              indir=$(dirname "$(dirname "$inner")")
+              shopt -s dotglob
+              mv "$indir"/* "$BUILD_DIR/toolchain-mipsel/toolchain-3.4.x/" || true
+            fi
           fi
-          hash -r || true
-          mipsel-linux-uclibc-gcc --version | head -1
+          "$BUILD_DIR/toolchain-mipsel/toolchain-3.4.x/bin/mipsel-linux-uclibc-gcc" --version | head -1
+          ls -la "$BUILD_DIR/toolchain-mipsel/toolchain-3.4.x/bin" | head
 
       - name: Apply HC5661A overlay
         run: |
-          sed -i 's/\r$//' scripts/prepare.sh
-          bash scripts/prepare.sh "$GITHUB_WORKSPACE/rt-n56u"
+          sed -i 's/\r$//' overlay/scripts/prepare.sh
+          bash overlay/scripts/prepare.sh "$BUILD_DIR"
 
       - name: Build firmware
-        working-directory: rt-n56u/trunk
+        working-directory: /opt/rt-n56u/trunk
         run: |
-          cp -f "configs/templates/${PRODUCT}.config" .config
-          # clean previous artifacts if any
-          ./clear_tree 2>/dev/null || true
-          fakeroot ./build_firmware
+          set -e
+          # prefer CI helper if present
+          if [ -x ./build_firmware_ci ]; then
+            fakeroot ./build_firmware_ci "${PRODUCT}"
+          else
+            cp -f "configs/templates/${PRODUCT}.config" .config
+            fakeroot ./build_firmware "${PRODUCT}"
+          fi
           echo "## Build result" >> "$GITHUB_STEP_SUMMARY"
-          ls -lah images/ >> "$GITHUB_STEP_SUMMARY" || true
+          ls -lah images/ >> "$GITHUB_STEP_SUMMARY"
+          test -n "$(ls images/*.trx 2>/dev/null || true)"
 
       - name: Collect artifacts
         run: |
           mkdir -p out
-          cp -f rt-n56u/trunk/images/* out/ 2>/dev/null || true
-          find rt-n56u/trunk/images -type f -print -exec cp -f {} out/ \; 2>/dev/null || true
+          cp -f /opt/rt-n56u/trunk/images/*.trx out/ || true
+          cp -f /opt/rt-n56u/trunk/images/* out/ || true
           ls -lah out/
           test -n "$(ls -A out)"
 
