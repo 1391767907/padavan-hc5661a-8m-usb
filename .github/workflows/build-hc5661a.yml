@@ -46,8 +46,8 @@ jobs:
 
       - name: Apply HC5661A overlay
         run: |
-          chmod +x scripts/prepare.sh
-          ./scripts/prepare.sh "$GITHUB_WORKSPACE/rt-n56u"
+          sed -i 's/\r$//' scripts/prepare.sh
+          bash scripts/prepare.sh "$GITHUB_WORKSPACE/rt-n56u"
 
       - name: Build firmware
         working-directory: rt-n56u/trunk
