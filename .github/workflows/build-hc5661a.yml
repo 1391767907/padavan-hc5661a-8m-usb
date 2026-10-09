@@ -1,0 +1,76 @@
+name: Build HC5661A Padavan (8M+64M USB)
+
+on:
+  workflow_dispatch:
+
+env:
+  SOURCE_REPO: https://github.com/hanwckf/rt-n56u.git
+  TOOLCHAIN_URL: https://github.com/hanwckf/padavan-toolchain/releases/download/v1.1/mipsel-linux-uclibc.tar.xz
+  PRODUCT: HC5661A
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout overlay
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential autoconf automake bison flex gawk gettext \
+            git gperf libtool pkg-config zlib1g-dev libgmp3-dev \
+            libmpc-dev libmpfr-dev texinfo unzip libncurses5-dev \
+            ccache gengetopt python3 wget cpio fakeroot xz-utils
+
+      - name: Clone Padavan source
+        run: |
+          git clone --depth=1 "$SOURCE_REPO" rt-n56u
+          echo "source=$(git -C rt-n56u rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup toolchain
+        run: |
+          sudo mkdir -p /opt
+          wget -qO /tmp/toolchain.tar.xz "$TOOLCHAIN_URL"
+          sudo tar -C /opt -xf /tmp/toolchain.tar.xz
+          if [ -d /opt/mipsel-linux-uclibc/bin ]; then
+            echo "/opt/mipsel-linux-uclibc/bin" >> "$GITHUB_PATH"
+          else
+            # some archives extract with nested dir
+            bin=$(find /opt -type f -name 'mipsel-linux-uclibc-gcc' | head -n1 | xargs dirname)
+            echo "$bin" >> "$GITHUB_PATH"
+          fi
+          hash -r || true
+          mipsel-linux-uclibc-gcc --version | head -1
+
+      - name: Apply HC5661A overlay
+        run: |
+          chmod +x scripts/prepare.sh
+          ./scripts/prepare.sh "$GITHUB_WORKSPACE/rt-n56u"
+
+      - name: Build firmware
+        working-directory: rt-n56u/trunk
+        run: |
+          cp -f "configs/templates/${PRODUCT}.config" .config
+          # clean previous artifacts if any
+          ./clear_tree 2>/dev/null || true
+          fakeroot ./build_firmware
+          echo "## Build result" >> "$GITHUB_STEP_SUMMARY"
+          ls -lah images/ >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p out
+          cp -f rt-n56u/trunk/images/* out/ 2>/dev/null || true
+          find rt-n56u/trunk/images -type f -print -exec cp -f {} out/ \; 2>/dev/null || true
+          ls -lah out/
+          test -n "$(ls -A out)"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: padavan-HC5661A-8M-USB
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
