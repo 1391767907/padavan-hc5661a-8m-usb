@@ -48,15 +48,28 @@ if [ -f "$ROOT/trunk/user/scripts/dev_init.sh" ]; then
     "$ROOT/trunk/user/scripts/dev_init.sh" || true
 fi
 
-# Dropbear: skip autoreconf (Ubuntu 22+ injects -fPIE/-D_FORTIFY that breaks
-# cross zlib/crypt probes) and point zlib at the staged cross lib.
+# Dropbear on Ubuntu 22+: --disable-harden avoids -fPIE/-D_FORTIFY breaking
+# cross crypt/zlib probes; --with-zlib points at staged cross libz.
 DB_MK="$ROOT/trunk/user/dropbear/Makefile"
 if [ -f "$DB_MK" ]; then
-  sed -i 's/[[:space:]]*autoreconf -v;[[:space:]]*//' "$DB_MK"
-  if ! grep -q -- '--with-zlib=' "$DB_MK"; then
-    sed -i 's|--enable-zlib|--enable-zlib --with-zlib=$(STAGEDIR)|' "$DB_MK"
-  fi
-  echo "[prepare] patched dropbear Makefile for cross zlib"
+  python3 - <<'PY' "$DB_MK"
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+text = p.read_text()
+needle = "\t\t--enable-zlib \\"
+if "--disable-harden" not in text:
+    if needle not in text:
+        raise SystemExit("[prepare] dropbear Makefile: --enable-zlib line not found")
+    text = text.replace(
+        needle,
+        "\t\t--disable-harden \\\n\t\t--enable-zlib \\\n\t\t--with-zlib=$(STAGEDIR) \\",
+        1,
+    )
+    p.write_text(text)
+    print("[prepare] patched dropbear: --disable-harden --with-zlib")
+else:
+    print("[prepare] dropbear already patched")
+PY
 fi
 
 # Enforce 64MB RAM / no media (avoid silentoldconfig NEW prompts)
