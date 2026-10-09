@@ -48,6 +48,15 @@ if [ -f "$ROOT/trunk/user/scripts/dev_init.sh" ]; then
     "$ROOT/trunk/user/scripts/dev_init.sh" || true
 fi
 
+# RNDIS/ZTE usb0 as Padavan NDIS WAN (upstream only knows weth*/wwan*)
+PATCH_PY="$OVERLAY/patches/fix-rndis-usb0-wan.py"
+if [ -f "$PATCH_PY" ]; then
+  sed -i 's/\r$//' "$PATCH_PY"
+  python3 "$PATCH_PY" "$ROOT"
+else
+  echo "[prepare] WARN: missing $PATCH_PY" >&2
+fi
+
 # Dropbear on Ubuntu 22+: --disable-harden avoids -fPIE/-D_FORTIFY breaking
 # cross crypt/zlib probes; --with-zlib points at staged cross libz.
 DB_MK="$ROOT/trunk/user/dropbear/Makefile"
