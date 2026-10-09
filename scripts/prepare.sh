@@ -48,11 +48,26 @@ if [ -f "$ROOT/trunk/user/scripts/dev_init.sh" ]; then
     "$ROOT/trunk/user/scripts/dev_init.sh" || true
 fi
 
+# Dropbear: skip autoreconf (Ubuntu 22+ injects -fPIE/-D_FORTIFY that breaks
+# cross zlib/crypt probes) and point zlib at the staged cross lib.
+DB_MK="$ROOT/trunk/user/dropbear/Makefile"
+if [ -f "$DB_MK" ]; then
+  sed -i 's/[[:space:]]*autoreconf -v;[[:space:]]*//' "$DB_MK"
+  if ! grep -q -- '--with-zlib=' "$DB_MK"; then
+    sed -i 's|--enable-zlib|--enable-zlib --with-zlib=$(STAGEDIR)|' "$DB_MK"
+  fi
+  echo "[prepare] patched dropbear Makefile for cross zlib"
+fi
+
+# Enforce 64MB RAM / no 5G second radio (MT7628NN)
+sed -i 's/^CONFIG_RALINK_RAM_SIZE=.*/CONFIG_RALINK_RAM_SIZE=64/' \
+  "$BOARD_DST/kernel-3.4.x.config"
+
 echo "[prepare] board files:"
 ls -la "$BOARD_DST"
-grep -E 'STORE_PART|FIRMWARE_ENABLE_USB|PRODUCT_ID|BTN_RESET' \
+grep -E 'STORE_PART|RALINK_RAM_SIZE|FIRMWARE_ENABLE_USB|PRODUCT_ID|BTN_RESET|RT_SECOND' \
   "$BOARD_DST/kernel-3.4.x.config" \
   "$BOARD_DST/board.h" \
-  "$TMPL_DST/HC5661A.config" | head -40 || true
+  "$TMPL_DST/HC5661A.config" | head -50 || true
 
 echo "[prepare] done"
