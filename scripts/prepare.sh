@@ -84,6 +84,9 @@ fi
 # Enforce 64MB RAM / no media (avoid silentoldconfig NEW prompts)
 KCFG="$BOARD_DST/kernel-3.4.x.config"
 sed -i 's/^CONFIG_RALINK_RAM_SIZE=.*/CONFIG_RALINK_RAM_SIZE=64/' "$KCFG"
+sed -i 's/^CONFIG_RT2880_UART_57600=y/# CONFIG_RT2880_UART_57600 is not set/' "$KCFG"
+sed -i 's/^# CONFIG_RT2880_UART_115200 is not set/CONFIG_RT2880_UART_115200=y/' "$KCFG"
+sed -i 's/^CONFIG_RALINK_UART_BRATE=.*/CONFIG_RALINK_UART_BRATE=115200/' "$KCFG"
 sed -i 's/^CONFIG_MEDIA_SUPPORT=.*/# CONFIG_MEDIA_SUPPORT is not set/' "$KCFG"
 grep -q 'CONFIG_USB_VIDEO_CLASS_INPUT_EVDEV' "$KCFG" || \
   echo '# CONFIG_USB_VIDEO_CLASS_INPUT_EVDEV is not set' >> "$KCFG"
